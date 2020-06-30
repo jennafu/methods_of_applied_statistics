@@ -1,0 +1,128 @@
+---
+title: "STA442 Homework 1 Appendix"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Question 1
+```{r}
+data('fruitfly', package='faraway')
+
+# Centre the variable throax length
+throax = fruitfly$thorax - 0.84
+
+# Find the GLM of longevity as a function of throax length and activity
+mod = glm(longevity ~ throax + activity, family=Gamma(link = 'log'), data=fruitfly)
+modcoeff = summary(mod)$coef
+modcoeff[,1] = round(exp(modcoeff[,1]),2) # Use to rescale variables
+knitr::kable(rbind(modcoeff,shape=c(1/summary(mod)$dispersion, NA, NA, NA)), digits=3, 
+             caption = "Estimated Parameters of the Gamma GLM")
+```
+
+```{r}
+# Find the scale and shape parameter
+shape = 1/summary(mod)$dispersion
+scale = exp(mod$coef["(Intercept)"])/shape
+
+# Draw the histogram
+xSeq = seq(0,100,len=200)
+hist(fruitfly$longevity, prob = TRUE, breaks = 25, xlab = "longevity",
+     ylim = c(0,0.040), main="Empirical Distribution of the Data and the Model Fit")
+lines(xSeq, dgamma(xSeq, shape = shape,scale = scale), col = "red")
+```
+
+
+# Question 2
+```{r}
+smokeUrl = 'http://pbrown.ca/teaching/appliedstats/data/smoke.RData'
+(smokeFile = tempfile(fileext='.RData'))
+download.file(smokeUrl, smokeFile, mode='wb')
+(load(smokeFile))
+```
+
+```{r}
+smokeFormats[smokeFormats$colName == 'Tried_cigarette_smkg_even', ]
+smoke$everSmoke = factor(smoke$Tried_cigarette_smkg_eve, levels=1:2, labels=c('yes','no'))
+```
+
+```{r}
+smokeSub = smoke[smoke$Age != 9 & !is.na(smoke$Race) 
+                 & !is.na(smoke$ever_tobacco_hookah_or_wa)
+                 & !is.na(smoke$chewing_tobacco_snuff_or), ]
+```
+
+```{r}
+smokeAgg = reshape2::dcast(smokeSub,
+	Age + Sex + Race + RuralUrban ~ chewing_tobacco_snuff_or,
+	length)
+smokeAgg = na.omit(smokeAgg)
+smokeAgg = smokeAgg[-7]
+dim(smokeAgg)
+
+# smokeModel 
+smokeAgg$y = cbind(smokeAgg$'TRUE', smokeAgg$'FALSE')
+smokeFit = glm(y ~ Age + Sex + Race + RuralUrban, 
+	family=binomial(link='logit'), data=smokeAgg)
+
+# We want to scale the variable Age, 
+# since the center age of intercept is 15, we substract 15 from values of variable
+smokeAgg$ageC = smokeAgg$Age - 15
+smokeFit = glm(y ~ ageC + Sex + Race + RuralUrban, 
+	family=binomial(link='logit'), data=smokeAgg)
+smokeTable = as.data.frame(summary(smokeFit)$coef)
+
+# LRT
+smokeFitReduced = glm(y ~ ageC + Sex + RuralUrban, 
+	family=binomial(link='logit'), data=smokeAgg)
+knitr::kable(anova(smokeFit,smokeFitReduced,test = "Chisq"),
+digits = 2,caption = "Likelihood Ratio Test of
+             Regular Use of Chewing Tobacco, Snuff or Dip")
+
+# After renaming the variables and using knitr
+rownames(smokeTable) = gsub("Race|RuralUrban|C$", "",
+                                rownames(smokeTable) )
+rownames(smokeTable) = gsub("SexF","Female", 
+                                rownames(smokeTable))
+smokeTable[,1] = exp(smokeTable[,1])
+knitr::kable(smokeTable, digits=4,
+             caption = "Odds of Regular Use of Chewing Tobacco, Snuff or Dip")
+```
+
+```{r}
+smokeAgg1 = reshape2::dcast(smokeSub,
+	Age + Sex + Race + RuralUrban ~ ever_tobacco_hookah_or_wa,
+	length)
+smokeAgg1 = na.omit(smokeAgg1)
+smokeAgg1 = smokeAgg1[-7]
+dim(smokeAgg1)
+
+# smokeModel 
+smokeAgg1$y = cbind(smokeAgg1$'TRUE', smokeAgg1$'FALSE')
+smokeFit1 = glm(y ~ Age + Sex + Race + RuralUrban, 
+	family=binomial(link='logit'), data=smokeAgg1)
+
+# We want to scale the variable Age, 
+# since the center age of intercept is 15, we substract 15 from values of variable
+smokeAgg1$ageC = smokeAgg1$Age - 15
+smokeFit1 = glm(y ~ ageC + Sex + Race + RuralUrban, 
+	family=binomial(link='logit'), data=smokeAgg1)
+smokeTable1 = as.data.frame(summary(smokeFit1)$coef)
+
+smokeFitReduced1 = glm(y ~ ageC + Sex + RuralUrban, 
+	family=binomial(link='logit'), data=smokeAgg1)
+knitr::kable(anova(smokeFit1,smokeFitReduced1,test = "Chisq"),
+             digits = 2,caption = "Likelihood Ratio Test for Having Used Hookah or Waterpipe")
+
+# After renaming the variables and using knitr
+rownames(smokeTable1) = gsub("Race|RuralUrban|C$", "",
+                                rownames(smokeTable1) )
+rownames(smokeTable1) = gsub("SexF","Female", 
+                                rownames(smokeTable1))
+smokeTable1[,1] = exp(smokeTable1[,1])
+knitr::kable(smokeTable1, digits=4,
+             caption = "Odds of Having Used Hookah or Waterpipe")
+```
+
