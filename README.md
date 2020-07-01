@@ -9,5 +9,6 @@ Statistical methodology to be covered includes:
 - Generalised linear models and maximum likelihood estimation
 - Linear mixed models for longitudinal and hierarchical data
 - Bayesian inference using INLA
-- Generalized linear mixed modelssemi-parametric regression
+- Generalized linear mixed models
+- Semi-parametric regression
 - Survival analysis
