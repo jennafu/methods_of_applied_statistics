@@ -1,0 +1,89 @@
+---
+title: "STA442 HW4 Q1"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# loading data
+smokeFile = Pmisc::downloadIfOld("http://pbrown.ca/teaching/appliedstats/data/smoke.RData")
+load(smokeFile)
+smoke = smoke[smoke$Age > 9, ]
+
+# forInla
+forInla = smoke[, c("Age", "Age_first_tried_cigt_smkg", "Sex", "Race", "state", "school", "RuralUrban")]
+forInla = na.omit(forInla)
+forInla$school = factor(forInla$school)
+```
+
+```{r}
+# forSurv
+library("INLA")
+forSurv = data.frame(time = (pmin(forInla$Age_first_tried_cigt_smkg,forInla$Age) - 4)/10, 
+                     event = forInla$Age_first_tried_cigt_smkg <= forInla$Age)
+
+# 0 means non-smoking, 1 means smoking, 2 means starts to smoke at or before 8 years old
+forSurv[forInla$Age_first_tried_cigt_smkg == 8, "event"] = 2
+
+smokeResponse = inla.surv(forSurv$time, forSurv$event)
+```
+ 
+```{r}
+fitS2 = inla(smokeResponse ~ RuralUrban + Sex + Race +
+               f(school, model = "iid",
+                 hyper = list(prec = list(prior = "pc.prec", param = c(0.3, 0.05))))
+             + f(state, model = "iid",
+                 hyper = list(prec = list(prior = "pc.prec", param = c(1, 0.05)))),
+             control.family = list(variant = 1,
+                                   hyper = list(alpha = list(prior = "normal", 
+                                                             param = c(log(0.9), (2/3)^(-2))))), 
+             control.mode = list(theta = c(8,2,5), restart = TRUE), 
+             data = forInla, family = "weibullsurv",verbose = TRUE)
+```
+
+```{r}
+fitS2$priorPost = Pmisc::priorPost(fitS2)
+do.call(matplot,fitS2$priorPost[["alpha for weibullsurv1"]]$matplot)
+fitS2$priorPost$legend$x = "topleft"
+do.call(legend, fitS2$priorPost$legend)
+
+do.call(matplot,fitS2$priorPost[["sd for school"]]$matplot)
+fitS2$priorPost$legend$x = "topleft"
+do.call(legend, fitS2$priorPost$legend)
+
+do.call(matplot,fitS2$priorPost[["sd for state"]]$matplot)
+fitS2$priorPost$legend$x = "topleft"
+do.call(legend, fitS2$priorPost$legend)
+```
+
+```{r}
+# Estimate of fixed effect coefficients
+modFix = exp(-fitS2$summary.fixed[, c("mean", "0.025quant","0.975quant")])
+knitr::kable(modFix, digit = 3)
+
+# Posterior estimates of hyperparamters
+modSd = Pmisc::priorPost(fitS2)$summary[, c("mean", "0.025quant", "0.975quant")]
+knitr::kable(modSd, digits = 3)
+```
+
+```{r}
+library('survival')
+
+forSurv$ones = 1
+xSeq = seq(5,20,len=1000)
+kappa = fitS2$summary.hyperpar['alpha','mean']
+lambda = exp(-fitS2$summary.fixed['(Intercept)','mean'])
+hist((forSurv$time*10)+4, main='', xlab='age', ylab='dens', prob=TRUE)
+
+cumHazC = ((xSeq/(10*lambda))^kappa)
+plot(xSeq, cumHazC, col='blue',type='l',
+     log='y', ylim=c(0.0001, 10), xlim = c(10,20),
+     xlab = "year")
+hazEst = survfit(Surv(time,ones) ~ 1, data=forSurv)
+hazEst$time = (hazEst$time*10)+4
+lines(hazEst,fun="cumhaz")
+```
+

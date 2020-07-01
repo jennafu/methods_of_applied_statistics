@@ -1,0 +1,54 @@
+---
+title: "STA442 HW4 Q2"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# download data
+pedestrainFile = Pmisc::downloadIfOld("http://pbrown.ca/teaching/appliedstats/data/pedestrians.rds")
+pedestrians = readRDS(pedestrainFile)
+pedestrians = pedestrians[!is.na(pedestrians$time),]
+```
+
+```{r}
+# create strata for time, light conditions and weather conditions
+pedestrians$y = pedestrians$Casualty_Severity == "Fatal"
+pedestrians$timeCat = format(pedestrians$time, "%Y_%b_%a_h%H")
+pedestrians$strata = paste(pedestrians$Light_Conditions,
+                           pedestrians$Weather_Conditions, 
+                           pedestrians$timeCat)
+
+theTable = table(pedestrians$strata, pedestrians$y)
+onlyOne = rownames(theTable)[which(theTable[, 1] ==0 | theTable[, 2] == 0)]
+# remove strata with no cases and no controls
+x = pedestrians[!pedestrians$strata %in% onlyOne, ]
+
+xSubM = as.data.frame(x[x$Casualty_Severity %in% c("Fatal", "Slight"),])
+theLogit = glm(y ~ sex + age + Light_Conditions + Weather_Conditions, data = xSubM, family = "binomial")
+knitr::kable(summary(theLogit)$coef,digit = 3)
+```
+
+```{r}
+library("survival")
+theClogit = clogit(y ~ age + age:sex + strata(strata),data = x)
+knitr::kable(summary(theClogit)$coef,digit = 3)
+
+theCoef = rbind(as.data.frame(summary(theClogit)$coef),`age 26 - 35` = c(0, 1, 0, NA, NA))
+theCoef$sex = c("Male", "Female")[1 + grepl("Female", rownames(theCoef))]
+theCoef$age = as.numeric(gsub("age|Over| - [[:digit:]].*|[:].*", "", rownames(theCoef)))
+theCoef = theCoef[order(theCoef$sex, theCoef$age), ]
+
+matplot(theCoef[theCoef$sex == "Male", "age"], 
+        exp(as.matrix(theCoef[theCoef$sex == "Male", 
+                              c("coef", "se(coef)")]) %*% Pmisc::ciMat(0.99)),
+        log = "y", type = "l", col = "black", lty = c(1,2, 2), xaxs = "i", yaxs = "i")
+
+matplot(theCoef[theCoef$sex == "Female", "age"], 
+        exp(as.matrix(theCoef[theCoef$sex =="Female",
+                              c("coef", "se(coef)")]) %*% Pmisc::ciMat(0.99)),
+        log = "y", type = "l", col = "black", lty = c(1,2, 2), xaxs = "i")
+```
